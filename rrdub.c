@@ -434,6 +434,8 @@ ubm_rrd_fetch(
     start = (start/step) * step;
     end = (end/step) * step;
 
+    time_t last = rrd_client_last(rrd, blobmsg_get_string(table[UBM_RRD_FILE]));
+
     DEBUG("rrd_client_fetch cf=%s start=%lu end=%lu step=%lu",
         cf,
         (unsigned long)start,
@@ -449,10 +451,14 @@ ubm_rrd_fetch(
         ubus_send_reply(ubus, request, blob.head);
         return UBUS_STATUS_UNKNOWN_ERROR;
     } else {
+        if (last < end)
+            end = last;
+
         blob_buf_init(&blob, 0);
         blobmsg_add_u64(&blob, "start", start);
         blobmsg_add_u64(&blob, "end", end);
         blobmsg_add_u64(&blob, "step", step);
+        blobmsg_add_u64(&blob, "last", last);
 
         rrd_value_t * cursor = values;
         void *array = blobmsg_open_array(&blob, "values");
