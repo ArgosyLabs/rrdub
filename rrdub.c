@@ -149,10 +149,10 @@ struct blob_buf blob;
 typedef enum {
     UBM_RRD_FILE,
     UBM_RRD_CF,
+    UBM_RRD_VALUE = UBM_RRD_CF,
     UBM_RRD_START,
     UBM_RRD_END,
     UBM_RRD_STEP,
-    UBM_RRD_VALUE,
     __UBM_RRD
 } ubm_rrd_type;
 
