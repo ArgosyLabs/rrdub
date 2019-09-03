@@ -144,8 +144,6 @@ parse_option(int key, char *argument, struct argp_state *state) {
 
 static struct argp argp = { options, parse_option, 0, 0 };
 
-rrd_client_t *rrd = NULL;
-
 struct blob_buf blob;
 
 typedef enum {
@@ -189,13 +187,13 @@ ubm_rrd_list
     blob_buf_init(&blob, 0);
     enum ubus_msg_status status = UBUS_STATUS_UNKNOWN_ERROR;
 
-    char * list = rrd_client_list(rrd, true, "/");
+    char * list = rrdc_list(true, "/");
     if (!list) {
         blobmsg_add_string(&blob, "error", rrd_get_error());
     } else {
         char * saveptr = "";
         for (char * entry = strtok_r(list, "\n", &saveptr) ; entry ; entry = strtok_r(NULL, "\n", &saveptr)) {
-            time_t last = rrd_client_last(rrd, entry);
+            time_t last = rrdc_last(entry);
             DEBUG("%s @ %lu", entry, (unsigned long)last);
             if (last > 0)
                 blobmsg_add_u64(&blob, entry, last);
@@ -229,7 +227,7 @@ ubm_rrd_stats(
     enum ubus_msg_status status = UBUS_STATUS_UNKNOWN_ERROR;
 
     rrdc_stats_t * stats;
-    if (rrd_client_stats_get(rrd, &stats)) {
+    if (rrdc_stats_get(&stats)) {
         blobmsg_add_string(&blob, "error", rrd_get_error());
     } else {
         for (rrdc_stats_t * cursor = stats ; cursor ; cursor = cursor->next)
@@ -272,7 +270,7 @@ ubm_rrd_flush(
     blob_buf_init(&blob, 0);
     enum ubus_msg_status status = UBUS_STATUS_UNKNOWN_ERROR;
 
-    if (rrd_client_flushall(rrd)) {
+    if (rrdc_flushall()) {
         blobmsg_add_string(&blob, "error", rrd_get_error());
     } else {
         status = UBUS_STATUS_OK;
@@ -302,7 +300,7 @@ ubm_rrd_ping(
     blob_buf_init(&blob, 0);
     enum ubus_msg_status status = UBUS_STATUS_UNKNOWN_ERROR;
 
-    if (!rrd_client_ping(rrd)) {
+    if (!rrdc_ping()) {
         blobmsg_add_string(&blob, "error", rrd_get_error());
     } else {
         status = UBUS_STATUS_OK;
@@ -346,7 +344,7 @@ ubm_rrd_info(
     blob_buf_init(&blob, 0);
     enum ubus_msg_status status = UBUS_STATUS_UNKNOWN_ERROR;
 
-    rrd_info_t * info = rrd_client_info(rrd, blobmsg_get_string(table[UBM_RRD_FILE]));
+    rrd_info_t * info = rrdc_info(blobmsg_get_string(table[UBM_RRD_FILE]));
     if (!info) {
         blobmsg_add_string(&blob, "error", rrd_get_error());
     } else {
@@ -434,15 +432,15 @@ ubm_rrd_fetch(
     start = (start/step) * step;
     end = (end/step) * step;
 
-    time_t last = rrd_client_last(rrd, blobmsg_get_string(table[UBM_RRD_FILE]));
+    time_t last = rrdc_last(blobmsg_get_string(table[UBM_RRD_FILE]));
 
-    DEBUG("rrd_client_fetch cf=%s start=%lu end=%lu step=%lu",
+    DEBUG("rrdc_fetch cf=%s start=%lu end=%lu step=%lu",
         cf,
         (unsigned long)start,
         (unsigned long)end,
         (unsigned long)step
         );
-    if (rrd_client_fetch(rrd,
+    if (rrdc_fetch(
             blobmsg_get_string(table[UBM_RRD_FILE]),
             cf, &start, &end, &step, &columns, &column_names, &values
     )) {
@@ -504,7 +502,7 @@ system_check(struct uloop_timeout *timer) {
     DEBUG("%p", timer);
     uloop_timeout_set(timer, 500);
 
-    if (!rrd_client_is_connected(rrd))
+    if (!rrdc_is_any_connected())
         uloop_end();
 }
 
@@ -519,12 +517,9 @@ int main(int argc, char *argv[]) {
     if (ubus_connect_ctx(&ubus, arguments.ubus_socket))
         return EXIT_FAILURE;
 
-    DEBUG("rrd_client_new %s", arguments.rrdtool_socket);
-    rrd = rrd_client_new(arguments.rrdtool_socket);
-    if (!rrd)
+    DEBUG("rrdc_connect %s", arguments.rrdtool_socket);
+    if (rrdc_connect(arguments.rrdtool_socket))
         return EXIT_FAILURE;
-
-    DEBUG("address %s", rrd_client_address(rrd));
 
     if (arguments.group) {
         DEBUG("group setgid %d", arguments.group->gr_gid);
@@ -568,7 +563,7 @@ int main(int argc, char *argv[]) {
     uloop_timeout_cancel(&timer);
     ubus_shutdown(&ubus);
     blob_buf_free(&blob);
-    rrd_client_destroy(rrd);
+    rrdc_disconnect();
 
     return EXIT_SUCCESS;
 }
