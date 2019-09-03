@@ -152,6 +152,7 @@ typedef enum {
     UBM_RRD_START,
     UBM_RRD_END,
     UBM_RRD_STEP,
+    UBM_RRD_VALUE,
     __UBM_RRD
 } ubm_rrd_type;
 
@@ -165,6 +166,11 @@ static const struct blobmsg_policy ubm_rrd_fetch_policy[] = {
     [UBM_RRD_START]  = { .name = "start", .type = BLOBMSG_TYPE_INT32 },
     [UBM_RRD_END]    = { .name = "end", .type = BLOBMSG_TYPE_INT32 },
     [UBM_RRD_STEP]   = { .name = "step", .type = BLOBMSG_TYPE_INT32 },
+};
+
+static const struct blobmsg_policy ubm_rrd_update_policy[] = {
+    [UBM_RRD_FILE]   = { .name = "file", .type = BLOBMSG_TYPE_STRING },
+    [UBM_RRD_VALUE]  = { .name = "value", .type = BLOBMSG_TYPE_STRING },
 };
 
 static int
@@ -480,6 +486,61 @@ ubm_rrd_fetch(
     return UBUS_STATUS_OK;
 }
 
+static int
+ubm_rrd_update(
+        struct ubus_context *ubus,
+        struct ubus_object *object,
+        struct ubus_request_data *request,
+        const char *method,
+        struct blob_attr *ba
+) {
+    DEBUG("object=%x peer=%x sequence=%u name=%s method=%s",
+        request->object,
+        request->peer,
+        request->seq,
+        object->name,
+        method
+        );
+
+    struct blob_attr *table[__UBM_RRD];
+    blobmsg_parse(
+        ubm_rrd_update_policy,
+        sizeof(ubm_rrd_update_policy)/sizeof(*ubm_rrd_update_policy),
+        table,
+        blob_data(ba),
+        blob_len(ba)
+        );
+
+    if (!table[UBM_RRD_FILE])
+        return UBUS_STATUS_INVALID_ARGUMENT;
+
+    if (!table[UBM_RRD_VALUE])
+        return UBUS_STATUS_INVALID_ARGUMENT;
+
+    blob_buf_init(&blob, 0);
+    enum ubus_msg_status status = UBUS_STATUS_UNKNOWN_ERROR;
+
+    DEBUG("rrdc_update file=%s value=%s",
+        blobmsg_get_string(table[UBM_RRD_FILE]),
+        blobmsg_get_string(table[UBM_RRD_VALUE])
+        );
+
+    const char * value = blobmsg_get_string(table[UBM_RRD_VALUE]);
+    if (rrdc_update(
+            blobmsg_get_string(table[UBM_RRD_FILE]),
+            1,
+            &value
+    )) {
+        blobmsg_add_string(&blob, "error", rrd_get_error());
+    } else {
+        status = UBUS_STATUS_OK;
+    }
+
+    blobmsg_add_u8(&blob, "success", status == UBUS_STATUS_OK);
+    ubus_send_reply(ubus, request, blob.head);
+    return status;
+}
+
 const struct ubus_method ubm_rrd_methods[] = {
     UBUS_METHOD_NOARG("list", ubm_rrd_list),
     UBUS_METHOD_NOARG("stats", ubm_rrd_stats),
@@ -487,6 +548,7 @@ const struct ubus_method ubm_rrd_methods[] = {
     UBUS_METHOD_NOARG("ping", ubm_rrd_ping),
     UBUS_METHOD("info", ubm_rrd_info, ubm_rrd_info_policy),
     UBUS_METHOD("fetch", ubm_rrd_fetch, ubm_rrd_fetch_policy),
+    UBUS_METHOD("update", ubm_rrd_update, ubm_rrd_update_policy),
 };
 
 struct ubus_object_type ubm_rrd_object_type = UBUS_OBJECT_TYPE("rrd", ubm_rrd_methods);

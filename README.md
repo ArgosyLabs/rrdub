@@ -9,10 +9,11 @@ Creates a ubus object (default: `rrd`) bound to a single `rrdcached`
 instance & exports
  * `stats`: general statistics for this cache,
  * `list`: list RRD files under management for this cache,
- * `info`: specific information for a particular RRD file, &
- * `fetch`: fetch current buckets for a particular RRD.
+ * `info`: specific information for a particular RRD file,
+ * `fetch`: fetch current buckets for a particular RRD, &
+ * `update`: update single value for a particular RRD.
 
-Does not currently support creation or updates via ubus.
+Does not currently support creation via ubus.
 
 Requires
  * [librrd](https://github.com/oetiker/rrdtool-1.x "RRDtool 1.x") (GPL2+ with FLOSS exception)
